@@ -4,3 +4,14 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
+
+artifacts/
+
+**/node_modules/
+**/.env
+**/.expo/
+**/dist/
+**/coverage/
+mobile/.git/
+**/.env.*
+!**/.env.example

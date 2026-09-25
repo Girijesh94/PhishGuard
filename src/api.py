@@ -7,6 +7,7 @@ import os
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from features import extract_features, normalize_url, parse_host
@@ -30,6 +31,11 @@ async def lifespan(app):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get('/', include_in_schema=False)
+def index():
+    return RedirectResponse(url='/docs')
 
 
 class URLRequest(BaseModel):

@@ -147,7 +147,8 @@ python src/build_features.py
 python src/train.py
 python src/evaluate.py
 python -m unittest discover -s src -p "test_*.py"
-python -m uvicorn api:app --app-dir src --port 8000
+python -m uvicorn api:app --app-dir src --port 8001 --reload
+
 ```
 
 Training regenerates train-only display ranges. Keep the package versions in model_metadata.json.

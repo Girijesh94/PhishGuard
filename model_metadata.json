@@ -1,0 +1,58 @@
+{
+  "created_utc": "2026-09-25T05:33:05.052071+00:00",
+  "model_kind": "url_text_structure",
+  "chosen_variant": "char_C2_blend0.5",
+  "threshold": 0.5,
+  "input_columns": [
+    "url"
+  ],
+  "feature_names": [
+    "url"
+  ],
+  "text_weight": 0.5,
+  "text_ngrams": [
+    3,
+    5
+  ],
+  "vocabulary_size": 180000,
+  "structural_feature_count": 38,
+  "selection": "Maximum validation phishing F1 at .5 among predefined candidates improving all accuracy/precision/recall/F1 and FPR versus the seven-feature reference. No test selection.",
+  "split": "Unchanged SHA256 registered-domain hash, seed 42: 60/20/20 by domain, whole shared platforms grouped.",
+  "split_counts": {
+    "train": {
+      "0": 88685,
+      "1": 83697
+    },
+    "validation": {
+      "0": 36052,
+      "1": 48165
+    },
+    "test": {
+      "0": 37458,
+      "1": 33036
+    }
+  },
+  "versions": {
+    "pandas": "3.0.5",
+    "scikit-learn": "1.9.1",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "joblib": "1.6.0",
+    "tldextract": "5.3.2"
+  },
+  "sha256": {
+    "model.pkl": "c9cf4c89432fb04c9ae67d88b521e6ac0169daaf2e6f2cad1133352cc805a894",
+    "feature_ranges.json": "2bc9eacb85313b6494ad05770d1a4e355d1fc8fc73f221aa6593d4945aded80b",
+    "data/urls.csv": "301d0dc2f9d8de0583156e345d4c7588280367611fec71155bea2377782bec19",
+    "data/features.csv": "8c563c7a49c3ca3ed459b98372295608441692d74e0bb66c532246cdeb6c16f8",
+    "data/splits.csv": "4962946817152e90d072465b03d366891e8e786c451d238fd2e25e7bbf98de92",
+    "src/features.py": "03b9c3e53182dc184e7e7b06e80f5c786281d2be14506fda614103cb61e9c3a4",
+    "src/url_model.py": "16cb5fa8cf99a1aa8af45b6850ca07bd44182a136dd538b5ba523495216bde4e",
+    "src/train.py": "b2efd44dee9be1241df22a511998d9ade64ad8394bf34c352cfdd6406cebfb6f",
+    "src/experiment_richer_model.py": "6723ca1f8808913ed8363310a8ce1e115d7e00dfa8eca69b9ea734ab875d01c8",
+    "src/build_final_dataset.py": "0149a298fb4897037865e17c15d4cdcefa9f269dbbd89fa2094da6ebe1ca5741",
+    "src/build_features.py": "d934eadc5c25db9cdb996fe8a104dee772f0d318a922823d3ad5ff2a8d74eabe"
+  },
+  "baseline_model_sha256": "a3f151b3b2b84e0eebafd1d7f78d518a84cef519e0ecbb2d1cbca8c857b17439",
+  "intended_use": "Research URL screening; no domain reputation or page inspection; scores uncalibrated."
+}

@@ -5,3 +5,9 @@ tldextract
 requests
 joblib
 matplotlib
+
+fastapi
+uvicorn
+
+scipy
+threadpoolctl

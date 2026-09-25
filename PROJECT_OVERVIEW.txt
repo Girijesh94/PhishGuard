@@ -1,0 +1,327 @@
+========================================================================
+PHASE 1 EXPLANATION (INTERVIEW-READY)
+========================================================================
+
+A 90-second answer I can say in an interview:
+
+"Phase 1 was about building a phishing-URL classifier whose results I could
+defend, rather than just saving a model file. The input is the URL string;
+the model never visits the destination. I built a labeled dataset from Kaggle
+benign and phishing URLs, a snapshot of verified and online PhishTank URLs,
+and Tranco popular domains as additional benign homepage examples. I cleaned
+duplicate and contradictory labels, normalized URLs consistently, and split
+by registered domain so related URLs could not appear in both training and
+test data. The first Random Forest used seven URL measurements, but it
+learned shortcuts from dataset-specific URL shapes and missed spelling
+patterns. The final model combines character 3-to-5-gram TF-IDF with
+Logistic Regression and 38 structural measurements with histogram gradient
+boosting. I selected its 50/50 probability blend on validation data at a
+fixed 0.5 threshold. On the same 70,494-URL internal test set, phishing
+precision was 86.71%, recall 88.47%, F1 87.58%, and overall accuracy 88.24%.
+I can also explain its 4,479 false alarms and 3,809 missed phishing URLs.
+The score is uncalibrated, and source bias, noisy labels, and unseen campaigns
+still limit real-world reliability. I would not market a 'legitimate' result
+as proof that a URL is safe."
+
+The detailed technical explanation:
+
+1. Problem and scope. Label 0 means benign/legitimate in the source data and
+   label 1 means phishing. The classifier uses only the submitted URL text:
+   spelling, URL structure, and numeric properties. It does not fetch a page,
+   inspect redirects, query DNS, use domain reputation, or determine whether
+   a website is safe today. This makes it a fast first-pass screening signal,
+   not a complete phishing defense.
+
+2. Dataset construction. The pipeline assigns a source to each row, samples
+   cleaned Kaggle benign URLs with a fixed random seed, includes Kaggle
+   phishing and PhishTank phishing URLs, and adds Tranco homepages. It
+   canonicalizes the URL, groups it by registered domain using a bundled
+   Public Suffix List, quarantines invalid hosts and any canonical URL found
+   with both labels, and collapses same-label duplicates. The retained
+   dataset has 327,093 unique canonical URLs: 162,195 benign and 164,898
+   phishing. The apparent near balance is a property of this constructed
+   research dataset, not the prevalence of phishing on the open web.
+
+3. Leakage control. A stable SHA-256 hash assigns each registered domain to
+   train, validation, or test (nominally 60/20/20 by domain). All URLs from
+   the same domain go to one partition; shared-hosting platforms are kept
+   together rather than split by user subdomain. Actual row counts are
+   172,382 training, 84,217 validation, and 70,494 test. The TF-IDF
+   vocabulary and IDF weights are fitted on training URLs only. The model
+   never receives the source name, Tranco rank, label, or split as a feature.
+
+4. Reference and final models. The controlled reference is a 200-tree Random
+   Forest on URL length, special-character count, IP-host flag, subdomain
+   count, entropy, digit ratio, and path depth. The selected richer model
+   has two components:
+   - Character TF-IDF for 3-to-5-character sequences, with training-only
+     vocabulary capped at 180,000, followed by class-balanced L2 Logistic
+     Regression (C=2).
+   - Thirty-eight structural measurements, including separate host/path/query
+     lengths, entropy and digit ratios, query parameters, punctuation,
+     encoded octets, token lengths, and embedded-http indicators, followed
+     by HistGradientBoostingClassifier.
+   Each component produces a phishing probability. The deployed score is
+   0.5 * text_score + 0.5 * structure_score. Score >= 0.5 is labeled
+   phishing. This is a probability-like model score, not a calibrated
+   statement of real-world risk.
+
+5. Selection and evidence. The baseline and richer candidates used the same
+   dataset and domain partitions. Candidate text regularization and blend
+   weights were compared on validation only. A candidate had to improve
+   validation accuracy, precision, recall, and F1 while reducing false
+   positives versus the reference; the highest eligible validation F1 won.
+   The exact selected training-only artifact was then evaluated on the fixed
+   test partition. In that internal comparison, accuracy went from 70.90%
+   to 88.24%, precision from 67.09% to 86.71%, recall from 74.39% to
+   88.47%, F1 from 70.55% to 87.58%, and benign false-positive rate from
+   32.18% to 11.96%. The final test confusion matrix is:
+       True benign predicted benign:       32,979
+       Benign incorrectly flagged:          4,479
+       Phishing incorrectly missed:          3,809
+       Phishing correctly flagged:          29,227
+   Precision asks, "Of the URLs flagged as phishing, how many were labeled
+   phishing?" Recall asks, "Of the labeled phishing URLs, how many were
+   caught?" F1 balances those two. False-positive rate asks how often benign
+   URLs were flagged. Accuracy alone would hide the different costs of false
+   alarms and missed attacks.
+
+6. Honest interpretation. This is a controlled internal benchmark, not a
+   fresh external or time-separated evaluation: the fixed test corpus had
+   appeared in earlier development. The model still misses about 11.53% of
+   labeled phishing in that test set and falsely flags 11.96% of labeled
+   benign URLs. Tranco homepages got worse: their false-positive rate rose
+   from 10.74% with the reference to 18.39% with the richer model. The
+   reported "top features" are signed TF-IDF term contributions to the
+   text model's log odds only; they do not explain the structural model or
+   the final blended score. The hybrid has no global
+   model.feature_importances_ attribute.
+
+DATASETS USED
+
+1. Kaggle malicious_phish.csv: supplies both rows marked benign and rows
+   marked phishing. The benign portion contains real page URLs with paths
+   and subdomains, which helped reduce the original bare-domain shortcut.
+   Its labels were inherited from the dataset and were not independently
+   adjudicated. Some apparently benign account/login URLs looked suspicious,
+   so 22,751 keyword-matching benign rows were quarantined as UNCERTAIN,
+   not reclassified as phishing. The keywords were login, verify, secure,
+   account, update, signin, confirm, wp-admin, and cmd=. This cleaning may
+   bias the model against legitimate account-related pages.
+
+2. PhishTank verified_online.csv: contributes phishing URLs whose 'verified'
+   and 'online' flags were both 'yes' in the downloaded snapshot. Those
+   flags are historical observations, not a guarantee that the links remain
+   online or that the source covers every phishing campaign.
+
+3. Tranco tranco_38KVL.csv: the first 12,000 ranked domains were converted
+   to bare-homepage URL examples and labeled benign. Popularity is only a
+   benign proxy, not a safety certificate. These examples addressed the
+   lack of short, path-depth-zero benign URLs, but their simple shape can
+   become its own dataset shortcut.
+
+After canonicalization and deduplication, source attribution is retained for
+audits. The final counts above combine these sources; some URLs appear in
+multiple source files and carry multiple source tags. Input CSVs and generated
+per-row artifacts are local research data and are not tracked in Git.
+The reproducibility trail is in src/build_final_dataset.py,
+artifacts/phase1/dataset_audit.json, data/splits.csv, and
+model_metadata.json.
+
+WHAT CHALLENGES WE FACED
+
+1. Source-shape bias: early benign examples were mostly short, bare Tranco
+   domains while phishing examples often had long hosts, subdomains, and
+   paths. A model could score well by identifying the dataset source rather
+   than phishing. HTTPS and 'www' could also act as accidental shortcuts.
+
+2. Label noise and contradictory records: the Kaggle benign class contained
+   suspicious-looking URLs, and the same canonical URL could appear with
+   conflicting labels across sources. Treating every inherited label as
+   ground truth would contaminate training and evaluation.
+
+3. Sparse coverage of legitimate URL shapes: benign homepages with no path
+   were initially too rare; adding real crawled benign URLs introduced
+   paths but also label uncertainty. Simple-looking phishing URLs and
+   simple-looking legitimate URLs can still share the same lexical shape.
+
+4. Underpowered seven-feature representation: length, punctuation, IP,
+   subdomains, entropy, digit ratio, and path depth discard most actual
+   spelling. Different URLs can have almost identical seven-number vectors
+   even if one impersonates a brand.
+
+5. Evaluation leakage and metric chasing: splitting individual URLs
+   randomly would put related URLs from the same registered domain in both
+   training and test. Repeated hand-picked Google, fake-PayPal, and IP URL
+   checks were useful diagnostics but could not measure overall behavior.
+   Changing a threshold to fix one example could worsen recall or FPR.
+
+6. Unequal error costs and subgroup regressions: false negatives are
+   dangerous in a security tool, while too many false positives make it
+   unusable. A better aggregate score did not mean every source or URL shape
+   improved. In particular, Tranco homepage false positives increased.
+
+7. Limits of URL-only inference: a new phishing domain can look ordinary,
+   and a legitimate login page can look suspicious. The model has no page
+   content, redirect chain, DNS/TLS context, domain age, or independent
+   reputation signal. Dataset labels and campaigns can drift over time.
+
+HOW WE OVERCAME THOSE CHALLENGES
+
+1. We normalized the representation consistently in training and inference:
+   remove the scheme and leading 'www', normalize host case, preserve
+   userinfo, ports, and path/query case, and normalize a bare root slash.
+   This reduced trivial source cues, but it can collapse genuinely
+   different HTTP/HTTPS or www/non-www destinations. Conflicting labels
+   after normalization are quarantined, not silently chosen.
+
+2. We treated suspicious benign labels as uncertain, recorded the exact
+   keyword quarantine, excluded invalid hosts, quarantined both sides of
+   label conflicts, and deduplicated same-label URLs. We did not relabel
+   a suspicious URL as phishing without evidence. We also did not remove
+   all phishing URLs on a domain merely because a benign URL used it;
+   shared platforms can host both classes.
+
+3. We combined Kaggle's page-like benign URLs with Tranco homepages and
+   inspected source and shape slices. This improved coverage but did not
+   remove the need for better independently labeled benign examples.
+
+4. We added learned character patterns alongside richer structural
+   measurements. The character model can distinguish spellings such as
+   brand-like tokens that seven counts cannot; the structural model adds
+   nonlinear host/path/query context. Validation selected the equal-weight
+   blend, rather than assuming more features or a more complex combiner
+   must be better.
+
+5. We kept entire registered domains in one partition, fitted the text
+   vocabulary on training only, fixed the 0.5 operating threshold, used
+   validation for selection, and read the full test confusion matrix and
+   source slices. A later out-of-fold stacking experiment did not pass its
+   predefined validation guard, so it was not promoted to deployment.
+
+6. We report precision, recall, F1, FPR, the confusion matrix, and
+   subgroup regressions together. This exposes the tradeoff instead of
+   presenting a single accuracy number. The next rigorous step is an
+   independently labeled, recent, time-separated test set plus explicit
+   calibration and operating-threshold review. Until then, Phase 1 is a
+   research screening component with known limitations, not a safety
+   guarantee.
+
+problem statement:
+Phishing attacks via deceptive, obfuscated, and short-lived URLs are among the primary entry points for credential theft, malware distribution, and financial fraud. Traditional URL defense mechanisms suffer from critical structural limitations:
+1. Reactive Blacklists: Services like PhishTank and Google Safe Browsing rely on verified incident reporting, which can leave a detection gap before newly created phishing links are listed.
+2. Dynamic Crawlers & DOM Scrapers: Fetching and parsing live webpage content introduces high latency, consumes bandwidth, violates user privacy, creates security vulnerabilities by triggering malicious exploits, and fails when attackers employ server-side cloaking, user-agent gating, or geographic redirects.
+3. Lightweight Heuristic Screening: Basic rule-based models (such as counting URL characters or checking top-level domains in isolation) can miss spelling cues; this project's seven-feature reference reached 70.90% accuracy and had a 32.18% benign false-positive rate on its internal test set.
+
+solution:
+PhishGuard provides URL-only phishing screening. Model inference does not request or visit the destination website. The application does send submitted URLs to its API and stores authenticated scan history, so it is not an entirely offline or private-on-device system.
+Key capabilities delivered:
+1. Dual-Component Ensemble ML: Combines sub-word character n-gram text modeling (TF-IDF + Logistic Regression) with 38 fine-grained structural URL metrics (HistGradientBoostingClassifier), boosting detection accuracy from 70.90% to 88.24% and phishing F1 from 70.55% to 87.58% across 70,494 holdout test URLs at a 0.5 decision threshold.
+2. Domain-Disjoint Evaluation Protocol: Enforces strict registered-domain partitioning so subdomains or hosted URLs from the same domain never cross train, validation, or test splits, reducing related-domain leakage while leaving external and time-separated generalization unproven.
+3. Multi-Tier Production Architecture: Wraps the trained ML pipeline in a low-latency Python/FastAPI inference microservice, backed by a secure Node.js/Express and PostgreSQL application gateway with user authentication, and provides a cross-platform React Native/Expo mobile app with real-time QR code ("quishing") scanning.
+
+project explanation:
+PhishGuard operates across four integrated functional tiers:
+1. Machine Learning & Feature Engineering Pipeline:
+   - Aggregates multi-source URL datasets from PhishTank, Kaggle, and the first 12,000 entries of a Tranco ranking snapshot.
+   - Extracts 38 structural URL measurements (Shannon entropy, digit and symbol distributions, path depth, token counts, and host/path/query characteristics) alongside 3-to-5 character n-grams across a 180,000-token vocabulary.
+   - Blends predictions from the character text model and structural gradient-boosted trees (50/50 blend) with signed lexical contributions returned to explain risk factors.
+2. Python ML Inference Microservice (FastAPI + Uvicorn):
+   - Exposes REST endpoints (/predict, /health, /docs).
+   - Validates model file integrity, metadata, and dependencies on startup using SHA-256 hashes to prevent runtime drift.
+   - Performs in-memory feature extraction and blended scoring for submitted URLs; latency has not been benchmarked.
+3. Application Backend Gateway (Node.js/Express + PostgreSQL):
+   - Handles user registration, bcrypt password hashing, and stateless JWT-based authentication.
+   - Orchestrates scan requests, persists authenticated scan audit histories in PostgreSQL, and proxies scan queries to the FastAPI ML service.
+4. Mobile Client Application (React Native + Expo):
+   - Delivers an intuitive mobile interface for iOS and Android.
+   - Features real-time camera-based QR code scanning to intercept "quishing" attacks before links open in a browser.
+   - Stores authentication tokens with Expo SecureStore's platform secure storage and presents scan verdicts with confidence metrics.
+
+tech stack used 1: Python 3.12
+    implementation: Powers the core data science workflows, dataset preprocessing, structural feature engineering, offline model training, statistical evaluation, and the FastAPI inference server.
+    why: Python is the industry standard for machine learning, offering robust numeric computing capabilities, direct integration with ML and data processing ecosystems, and fast API prototyping.
+
+tech stack used 2: Scikit-learn
+    implementation: Implements the character TF-IDF vectorizer (TfidfVectorizer), regularized Logistic Regression classifier, and Histogram-based Gradient Boosting classifier (HistGradientBoostingClassifier), along with cross-validation and metric evaluation utilities.
+    why: Provides battle-tested, high-performance, and reproducible algorithms for both linear text modeling and nonlinear tree ensembles with native support for sparse matrices and fast inference.
+
+tech stack used 3: Pandas & NumPy
+    implementation: Used across data ingestion, domain filtering, cleaning scripts (merging Kaggle, PhishTank, and Tranco datasets), dataset splitting, feature array transformations, and statistical metric aggregation.
+    why: Delivers vectorized, memory-efficient data structures and tabular manipulation required to reliably process over 100,000 URLs with low computational overhead.
+
+tech stack used 4: SciPy
+    implementation: Handles sparse matrix representations and mathematical transformations generated during character n-gram TF-IDF vectorization.
+    why: Provides high-performance scientific routines and sparse linear algebra required by scikit-learn algorithms to operate efficiently on high-dimensional text matrices without excessive memory usage.
+
+tech stack used 5: tldextract
+    implementation: Accurately separates each URL into its subdomains, registered domain, and public suffix (TLD) based on the Public Suffix List (PSL).
+    why: Standard URL parsing libraries often misinterpret multi-part TLDs (such as .co.uk or .com.br). Correct registered-domain extraction is critical to prevent data leakage across train, validation, and test splits and to calculate accurate domain-level structural metrics.
+
+tech stack used 6: Joblib
+    implementation: Serializes and loads the trained dual-model pipeline and metadata dictionary to and from disk (model.pkl).
+    why: Optimized for persisting large Python scientific objects, particularly scikit-learn models containing heavy NumPy arrays, for reliable serialization and loading of the scikit-learn pipeline.
+
+tech stack used 7: Matplotlib
+    implementation: Generates offline evaluation graphs, ROC curves, and confusion matrix visualizations during model exploration and evaluation reporting.
+    why: The standard data visualization library in Python, producing clear, publication-quality figures for performance analysis and documentation.
+
+tech stack used 8: FastAPI
+    implementation: Serves the trained machine learning pipeline via REST endpoints (/predict for URL inference and /health for model metadata, PID, and change detection monitoring).
+    why: Extremely lightweight, high-performance asynchronous web framework built on Starlette and Pydantic with automated OpenAPI/Swagger documentation, type validation, and minimal serialization latency.
+
+tech stack used 9: Uvicorn
+    implementation: Functions as the ASGI production and development web server running the FastAPI application, supporting live reload and asynchronous request handling.
+    why: Lightning-fast, production-grade ASGI web server designed for asynchronous Python applications, offering seamless concurrency and socket handling.
+
+tech stack used 10: Pydantic
+    implementation: Validates incoming request payloads for URL structure and length constraints in the FastAPI microservice (URLRequest schema).
+    why: Enforces strict data validation and parsing with informative error messages before requests enter the ML feature pipeline.
+
+tech stack used 11: Node.js & Express.js
+    implementation: Serves as the business logic API gateway (backend/src/server.js) handling user authentication (/api/auth/register, /api/auth/login), scan requests (/api/scans), and forwarding URLs to the FastAPI inference microservice.
+    why: Provides an efficient, event-driven architecture well-suited for I/O-heavy gateway routing, authentication middleware, and database operations.
+
+tech stack used 12: PostgreSQL & pg (node-postgres)
+    implementation: Stores relational application data including registered users, hashed passwords, timestamps, and history records of scanned URLs, labels, and confidence scores.
+    why: Robust, ACID-compliant relational database ensuring data integrity, indexed historical queries, and enterprise-grade reliability.
+
+tech stack used 13: CORS & Dotenv
+    implementation: CORS enables controlled cross-origin access between the frontend mobile client and backend server; Dotenv loads sensitive environment variables (such as DATABASE_URL and JWT_SECRET) securely from .env files.
+    why: Ensures proper browser/client security policies and adheres to 12-factor application development principles for configuration management.
+
+tech stack used 14: bcryptjs
+    implementation: Hashes and salts user passwords with a configurable work factor before storing them in the PostgreSQL database.
+    why: Protects user credentials against rainbow table, dictionary, and brute-force attacks using proven adaptive cryptographic hashing.
+
+tech stack used 15: JSON Web Tokens (jsonwebtoken)
+    implementation: Signs and verifies stateless Bearer tokens for authenticated API sessions across mobile and backend interactions.
+    why: Enables secure, stateless user session authorization without requiring server-side session stores, reducing latency and scaling effortlessly.
+
+tech stack used 16: SHA-256 Cryptographic Checksums (hashlib & crypto)
+    implementation: Computes and validates SHA-256 hashes of the trained model file, source feature code, and dataset artifacts at runtime startup.
+    why: Detects mismatches between local artifacts and the recorded manifest; it is not a signed provenance or tamper-proof security guarantee.
+
+tech stack used 17: React Native & Expo
+    implementation: Powers the cross-platform mobile client (mobile/), providing reactive user interfaces for inputting URLs, viewing safety status alerts, and retrieving scan history.
+    why: Enables single-codebase development for both Android and iOS with native performance, modular component design, and streamlined mobile build workflows.
+
+tech stack used 18: TypeScript
+    implementation: Provides static typing, interface contracts, and compile-time error checking across the mobile React Native codebase.
+    why: Enhances code maintainability, reduces runtime errors, and ensures reliable data structures across API response handling and component states.
+
+tech stack used 19: Expo Camera (expo-camera)
+    implementation: Integrates device hardware camera access to scan physical and digital QR codes directly inside the mobile app.
+    why: Allows immediate scanning and extraction of embedded URLs from QR codes to defend against modern "quishing" (QR phishing) threats before the user opens the link in a browser.
+
+tech stack used 20: Expo SecureStore (expo-secure-store)
+    implementation: Encrypts and securely persists user JWT authentication tokens on the physical device.
+    why: Uses platform secure storage on iOS and Android; hardware backing depends on the device and platform configuration.
+
+tech stack used 21: Python unittest
+    implementation: Implements automated unit and regression test suites (test_features.py, test_url_model.py, test_stack_model.py) verifying feature calculations and inference contracts.
+    why: Built-in Python testing framework that executes fast, dependency-free verification to prevent regressions across model iterations.
+
+tech stack used 22: Node.js Test Runner & Supertest
+    implementation: Executes automated HTTP endpoint tests against the Express backend routes, authentication flows, and scan proxy endpoints.
+    why: Provides lightweight, native testing with Supertest for high-fidelity HTTP integration assertions without external heavy frameworks.

@@ -123,3 +123,17 @@ shows recent scans. A QR code only fills the input; the user submits it to
 analyze. Android and iOS are the intended platforms. For a device over the
 network, configure backend origin, firewall and TLS appropriately. The model
 confidence is uncalibrated and a legitimate result does not prove safety.
+
+## 3D web frontend
+
+The browser frontend in `web/` combines React Three Fiber, ShaderGradient,
+Liquid Glass JS, and Paper liquid-logo. It includes a live URL scanner,
+responsive layouts, a motion toggle, and a static fallback without WebGL.
+
+Start FastAPI on port 8001, then run `npm ci` and `npm run dev` inside `web/`.
+Open http://127.0.0.1:5173. If FastAPI uses another port, set
+`PHISHGUARD_MODEL_URL` in `web/.env` (see `web/.env.example`).
+
+This is a local model preview; it does not save scans or replace the authenticated
+Express/Expo flow. See [web/README.md](web/README.md) for build, testing,
+production proxy setup, and the four library integrations.
